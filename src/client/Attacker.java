@@ -1,20 +1,16 @@
 package client;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Scanner;
 
-import cript.ImplCifraDeVernam;
 import cript.ImplHmac;
 import kdc.Distribuidor;
 import server.Banco;
 
-public class User {
-
+public class Attacker {
 	Banco banco;
 	
 	private static Scanner s = new Scanner(System.in);
-	private static  String hashKey; 
+	private static String hashKey = "";
 	
 	public static void main(String[] args) {
 		boolean run = true;
@@ -27,12 +23,12 @@ public class User {
 				break;
 			}
 			toMainMenu = login(msg);
-			
-			if(toMainMenu.equals("ok")) {
+			System.out.println(toMainMenu);
+			if(toMainMenu.equals("ok") || toMainMenu.equals("Usuario Invalido")) {
 				System.out.println("Login com Sucesso!");
 				menuPrincipal();
 			}
-			System.out.println(toMainMenu);
+			else System.out.println(toMainMenu);
 				
 			
 		}
@@ -106,7 +102,7 @@ public class User {
 	private static String login(String dados) {
 		if(dados.toCharArray()[0]=='1') {
 			if(Banco.login(dados).equals("auth")) {
-				User.hashKey = Distribuidor.HASHKEY;
+				Attacker.hashKey = Distribuidor.HASHKEY;
 				return "ok";
 			}
 			return "Usuario Invalido";
@@ -124,14 +120,13 @@ public class User {
 				hash = ImplHmac.Hmac(Distribuidor.HASHKEY, dados);
 			}
 			else{
-				if(User.hashKey.isEmpty()) {
+				if(Attacker.hashKey.isEmpty()) {
 					return "Chave do Hash nao esta presente";
 				}
-				hash = ImplHmac.Hmac(User.hashKey, dados);
+				hash = ImplHmac.Hmac(Attacker.hashKey, dados);
 			}
-			String vernamEncrypted = ImplCifraDeVernam.encrypt(dados, Distribuidor.VERNANKEY);
 			
-			String encryptedMsg = Distribuidor.aes.encrypt(vernamEncrypted);
+			String encryptedMsg = Distribuidor.aes.encrypt(dados);
 			
 			String encryptedReply = Banco.receberDados(encryptedMsg, hash);
 			
@@ -150,13 +145,11 @@ public class User {
 		
 		String decryptedMsg = Distribuidor.aes.decrypt(encodedMsg);
 		
-		String decryptedVernam = ImplCifraDeVernam.decrypt(decryptedMsg, Distribuidor.VERNANKEY);
-		
 			String newHash;
 			try {
-				newHash = ImplHmac.Hmac(Distribuidor.HASHKEY, decryptedVernam);
+				newHash = ImplHmac.Hmac(Distribuidor.HASHKEY, decryptedMsg);
 				if(newHash.equals(hash)) {
-					return decryptedVernam;
+					return decryptedMsg;
 				}
 				else
 					return "Não foi possível estabelecer conexão";
@@ -238,12 +231,10 @@ public class User {
 			case 6:
 				System.out.println(enviarDados("sair"));
 				keepRunning = false;
-				
+				Attacker.hashKey = "";
 				break;
 			}
 				
 		}
-		
-		
 	}
 }

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import cript.ImplCifraDeVernam;
 import cript.ImplHmac;
 import kdc.Distribuidor;
 import mode.Conta;
@@ -14,17 +15,33 @@ public class Banco {
 	static List<Conta> contas = new ArrayList<Conta>();
 	static Conta contaAtual;
 	
+	public static String login(String requisicao) {
+		String[] dados = requisicao.split("_");
+		
+		for(Conta c : contas) {
+			if(c.getAccoutNumber().equals(dados[1]) && c.getPassword().equals(dados[2])) {
+				contaAtual = c;
+				return "auth";
+			}
+		}
+		return "Falha no Login";
+	}
+	
 	public static String receberDados(String encodedMsg, String hash) {
 		
 		String reply;
 		String decryptedMsg = Distribuidor.aes.decrypt(encodedMsg);
+		String vernamDecrypted = ImplCifraDeVernam.decrypt(decryptedMsg, Distribuidor.VERNANKEY);
 		
 			String newHash;
 			try {
-				newHash = ImplHmac.Hmac(Distribuidor.HASHKEY, decryptedMsg);
+				newHash = ImplHmac.Hmac(Distribuidor.HASHKEY, vernamDecrypted);
 				if(newHash.equals(hash)) {
-					reply = operacoes(decryptedMsg);
+					reply = operacoes(vernamDecrypted);
 					return enviarDados(reply);
+				}
+				else {
+					return "Valor do Hash não compatível";
 				}
 			} catch (Exception e) {
 				// TODO Auto-generated catch block
@@ -36,7 +53,8 @@ public class Banco {
 	private static String enviarDados(String dados) {
 		try {
 			String hash = ImplHmac.Hmac(Distribuidor.HASHKEY, dados);
-			String encryptedMsg = Distribuidor.aes.encrypt(dados);
+			String vernamEncrypted = ImplCifraDeVernam.encrypt(dados, Distribuidor.VERNANKEY);
+			String encryptedMsg = Distribuidor.aes.encrypt(vernamEncrypted);
 			
 			return (encryptedMsg+"_"+hash);
 		} catch (Exception e) {
@@ -48,6 +66,8 @@ public class Banco {
 	}
 
 	private static String operacoes(String requisicao) {
+		DecimalFormat format = new DecimalFormat("#.00");
+		
 		if(requisicao.equals("sair")) {
 			for(int i = 0; i<contas.size(); i++) {
 				if(contaAtual.getAccoutNumber().equals(contas.get(i).getAccoutNumber())) {
@@ -87,7 +107,7 @@ public class Banco {
 			Double deposito = Double.parseDouble(dados[1]);
 			
 			contaAtual.setSaldo(contaAtual.getSaldo()+deposito);
-			return "Deposito realizado! Saldo Atual: R$"+contaAtual.getSaldo();
+			return "Deposito realizado! Saldo Atual: R$"+format.format(contaAtual.getSaldo());
 		}
 		else if(requisicao.toCharArray()[0]=='s') {
 			String[] dados = requisicao.split("_");
@@ -99,10 +119,10 @@ public class Banco {
 			else
 				return "Quantia Indisponivel para saque!";
 			
-			return "Saque realizado! Saldo Atual: R$"+contaAtual.getSaldo();
+			return "Saque realizado! Saldo Atual: R$"+format.format(contaAtual.getSaldo());
 		}
 		else if(requisicao.toCharArray()[0]=='c') {
-			return "Saldo Atual: R$"+contaAtual.getSaldo();
+			return "Saldo Atual: R$"+format.format(contaAtual.getSaldo());
 		}
 		else if(requisicao.toCharArray()[0]=='t') {
 			String[] dados = requisicao.split("_");
@@ -113,7 +133,7 @@ public class Banco {
 						contaAtual.setSaldo(contaAtual.getSaldo()-transferencia);
 						contas.get(i).setSaldo(contas.get(i).getSaldo()+transferencia);
 						
-						return "Transferencia de R$"+contas.get(i).getSaldo()+" para a conta "+dados[1];
+						return "Transferencia de R$"+transferencia+" para a conta "+dados[1];
 					}
 					return "Quantia Indisponivel para transferencia!";
 				}
@@ -127,7 +147,6 @@ public class Banco {
 			double taxa;
 			List<Double> projs = new ArrayList<Double>();  
 			String projecao;
-			DecimalFormat format = new DecimalFormat("#.00");
 			
 			if(dados[1].equals("1")) {
 				taxa = 0.005;
